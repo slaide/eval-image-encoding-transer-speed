@@ -23,6 +23,8 @@ total time is `request processing time`+`response decoding time`.
 
 ## Apple Silicon M1 Max
 
+Python version: 3.11.6
+
 | Method    | Format     | Compression   | Progressive   |   Total Time (s) |
 |:----------|:-----------|:--------------|:--------------|-----------------:|
 | HTTP      | raw_bytes  | None          | N/A           |        0.0135958 |
@@ -76,3 +78,61 @@ total time is `request processing time`+`response decoding time`.
 | HTTP      | webp       | 85            | N/A           |        1.28031   |
 | gRPC      | webp       | 85            | N/A           |        1.28084   |
 | WebSocket | webp       | 85            | N/A           |        1.44115   |
+
+## Raspberry Pi 5
+
+Python Version: 3.13.0
+
+| Method    | Format     | Compression   | Progressive   |   Total Time (s) |
+|:----------|:-----------|:--------------|:--------------|-----------------:|
+| HTTP      | raw_bytes  | None          | N/A           |        0.0286617 |
+| gRPC      | raw_bytes  | None          | N/A           |        0.0345874 |
+| HTTP      | avif       | 10            | N/A           |        0.0435562 |
+| gRPC      | jpeg       | 10            | False         |        0.043967  |
+| gRPC      | avif       | 10            | N/A           |        0.0450304 |
+| HTTP      | jpeg       | 10            | False         |        0.0465817 |
+| HTTP      | raw_base64 | None          | N/A           |        0.0563841 |
+| HTTP      | jpeg       | 50            | False         |        0.0640697 |
+| gRPC      | raw_base64 | None          | N/A           |        0.0649862 |
+| gRPC      | jpeg       | 50            | False         |        0.0649922 |
+| gRPC      | avif       | 50            | N/A           |        0.0651193 |
+| HTTP      | avif       | 50            | N/A           |        0.0680673 |
+| gRPC      | jpeg       | 85            | False         |        0.0790389 |
+| HTTP      | jpeg       | 85            | False         |        0.0822692 |
+| gRPC      | avif       | 85            | N/A           |        0.0822933 |
+| HTTP      | avif       | 85            | N/A           |        0.0826378 |
+| WebSocket | jpeg       | 10            | False         |        0.139501  |
+| WebSocket | avif       | 10            | N/A           |        0.140209  |
+| gRPC      | jpeg       | 10            | True          |        0.190608  |
+| HTTP      | jpeg       | 10            | True          |        0.200155  |
+| WebSocket | jpeg       | 50            | False         |        0.244813  |
+| WebSocket | avif       | 50            | N/A           |        0.249706  |
+| gRPC      | png        | 0             | N/A           |        0.255159  |
+| HTTP      | png        | 0             | N/A           |        0.255222  |
+| WebSocket | jpeg       | 10            | True          |        0.259675  |
+| WebSocket | jpeg       | 85            | False         |        0.355558  |
+| WebSocket | avif       | 85            | N/A           |        0.388203  |
+| gRPC      | jpeg       | 50            | True          |        0.42363   |
+| HTTP      | jpeg       | 50            | True          |        0.432249  |
+| WebSocket | raw_bytes  | None          | N/A           |        0.445249  |
+| gRPC      | png        | 9             | N/A           |        0.528666  |
+| HTTP      | png        | 5             | N/A           |        0.533904  |
+| HTTP      | png        | 9             | N/A           |        0.534008  |
+| gRPC      | png        | 5             | N/A           |        0.53494   |
+| WebSocket | raw_base64 | None          | N/A           |        0.53941   |
+| gRPC      | jpeg       | 85            | True          |        0.582929  |
+| HTTP      | jpeg       | 85            | True          |        0.591892  |
+| WebSocket | jpeg       | 50            | True          |        0.595756  |
+| WebSocket | jpeg       | 85            | True          |        0.841195  |
+| WebSocket | png        | 5             | N/A           |        0.932298  |
+| WebSocket | png        | 0             | N/A           |        0.937899  |
+| WebSocket | png        | 9             | N/A           |        0.940068  |
+| gRPC      | webp       | 10            | N/A           |        2.05821   |
+| HTTP      | webp       | 10            | N/A           |        2.07509   |
+| WebSocket | webp       | 10            | N/A           |        2.19436   |
+| gRPC      | webp       | 50            | N/A           |        2.26503   |
+| HTTP      | webp       | 50            | N/A           |        2.27698   |
+| WebSocket | webp       | 50            | N/A           |        2.46878   |
+| gRPC      | webp       | 85            | N/A           |        2.48822   |
+| HTTP      | webp       | 85            | N/A           |        2.50719   |
+| WebSocket | webp       | 85            | N/A           |        2.77084   |
