@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# requires: numpy Pillow pandas requests websockets grpcio grpcio-tools grpclib protobuf tqdm
+# requires: numpy Pillow pandas requests websockets grpcio grpcio-tools grpclib protobuf tqdm tabulate
 
 import os
 import sys
@@ -389,7 +389,7 @@ def run_tests(num_repeats=3):
     df = pd.DataFrame(results)
     df = df.sort_values(by="Total Time (s)")
     print("\nTest Results:")
-    print(df.to_string(index=False))
+    print(df.to_markdown(index=False))
 
 # Display summarized results with median total time
 def summarize_results(results):
@@ -402,7 +402,7 @@ def summarize_results(results):
     median_df = df.groupby(["Method", "Format", "Compression", "Progressive"], as_index=False)["Total Time (s)"].median()
     median_df = median_df.sort_values(by="Total Time (s)")
     print("\nMedian Test Results:")
-    print(median_df.to_string(index=False))
+    print(median_df.to_markdown(index=False))
 
 # Run Tests and Display Summarized Results
 if __name__ == "__main__":
