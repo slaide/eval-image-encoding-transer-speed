@@ -28,11 +28,39 @@ from tqdm import tqdm
 
 # import done, set up pre-computed values
 
+def get_image(noise_level=0):
+    from skimage import data
+    from PIL import Image
+    import numpy as np
+
+    # Load the 'chelsea' test image from scikit-image
+    image = data.chelsea()
+
+    # Convert the image to a Pillow Image object
+    image_pil = Image.fromarray(image)
+
+    # Convert to grayscale (monochrome)
+    image_mono = image_pil.convert("L")  # "L" mode for 8-bit grayscale
+
+    # Convert to a 2D numpy array (uint8)
+    image_array = np.array(image_mono, dtype=np.uint8)
+
+    # Add low-magnitude noise if noise_level > 0
+    if noise_level > 0:
+        noise = np.random.randint(-noise_level, noise_level + 1, image_array.shape, dtype=np.int16)
+        noisy_image = np.clip(image_array.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+        return noisy_image
+    else:
+        return image_array
+
+
 NUM_TEST_REPEATS=3
 
 images=[
-    np.random.randint(0, 256, (3000, 3000), dtype=np.uint8)
-    for _
+    #np.random.randint(0, 0, (3000, 3000), dtype=np.uint8)
+    #np.zeros((2500,2500),dtype=np.uint8)
+    get_image(i)
+    for i
     in range(NUM_TEST_REPEATS)
 ]
 
@@ -83,10 +111,11 @@ import image_service_pb2_grpc
 
 # define server handlers
 
-def img_as_iobuf(img_format,quality=None,compress_level=None,progressive=None,index:int=0)->io.BytesIO|None:
+def img_as_iobuf(img_format, quality=None, compress_level=None, progressive=None, index:int=0) -> io.BytesIO | None:
     img_data = images[0]
     img = Image.fromarray(img_data)
     buffer = io.BytesIO()
+
     try:
         if img_format == "jpeg":
             img.save(buffer, format="JPEG", quality=quality, progressive=progressive)
@@ -97,8 +126,14 @@ def img_as_iobuf(img_format,quality=None,compress_level=None,progressive=None,in
         elif img_format == "avif":
             img.save(buffer, format="JPEG", quality=quality)
         elif img_format == "raw_bytes":
+            # Prepend dimensions as 8-byte integers (4 bytes for height, 4 bytes for width)
+            buffer.write(img.height.to_bytes(4, byteorder='big'))
+            buffer.write(img.width.to_bytes(4, byteorder='big'))
             buffer.write(img.tobytes())
         elif img_format == "raw_base64":
+            # Prepend dimensions as 8-byte integers
+            buffer.write(img.height.to_bytes(4, byteorder='big'))
+            buffer.write(img.width.to_bytes(4, byteorder='big'))
             buffer.write(base64.b64encode(img.tobytes()))
         else:
             return None
@@ -110,6 +145,7 @@ def img_as_iobuf(img_format,quality=None,compress_level=None,progressive=None,in
         return None
 
     return buffer
+
 
 # gRPC Service Implementation
 class ImageService(image_service_pb2_grpc.ImageServiceServicer):
@@ -145,6 +181,10 @@ class ImageRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
 
+        if self.path == "/":
+            self.serve_html()
+            return
+
         fmt = url.path.split('/')[1]
         query_params = parse_qs(url.query)
 
@@ -160,12 +200,32 @@ class ImageRequestHandler(BaseHTTPRequestHandler):
             return
 
         self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')  # Add CORS header
         self.end_headers()
         self.wfile.write(buffer.getvalue())
 
+    def serve_html(self):
+        try:
+            with open("index.html", "rb") as file:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.send_header('Access-Control-Allow-Origin', '*')  # Add CORS header
+                self.end_headers()
+                self.wfile.write(file.read())
+        except FileNotFoundError:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"File not found")
+
+http_server=None
 def start_http_server():
-    server = TCPServer(("localhost", 8000), ImageRequestHandler)
-    server.serve_forever()
+    global http_server
+    http_server = TCPServer(("localhost", 8000), ImageRequestHandler)
+    http_server.serve_forever()
+def stop_http_server():
+    global http_server
+    http_server.shutdown()
+    http_server.server_close()
 
 # WebSocket Server with Parameter Handling and ACK Verification
 async def websocket_handler(websocket, path):
@@ -233,10 +293,16 @@ def request_images_grpc(format="jpeg", quality=85, compress_level=6, progressive
         elapsed_time = time.time() - start_time
         
         if format == "raw_bytes":
-            img_array = np.frombuffer(response.image_data, dtype=np.uint8).reshape((3000, 3000))
+            height = int.from_bytes(response.image_data[:4], byteorder='big')
+            width = int.from_bytes(response.image_data[4:8], byteorder='big')
+            print(f"grpc image {format=} {width=} {height=}")
+            img_array = np.frombuffer(response.image_data[8:], dtype=np.uint8).reshape((height, width))
         elif format == "raw_base64":
-            raw_bytes = base64.b64decode(response.image_data)
-            img_array = np.frombuffer(raw_bytes, dtype=np.uint8).reshape((3000, 3000))
+            height = int.from_bytes(response.image_data[:4], byteorder='big')
+            width = int.from_bytes(response.image_data[4:8], byteorder='big')
+            print(f"grpc image {format=} {width=} {height=}")
+            raw_bytes = base64.b64decode(response.image_data[8:])
+            img_array = np.frombuffer(raw_bytes, dtype=np.uint8).reshape((height, width))
         else:
             img = Image.open(io.BytesIO(response.image_data))
             img_array = np.array(img)
@@ -262,13 +328,20 @@ def request_images_http(fmt, quality=None, compress_level=None, progressive=Fals
     elapsed_time = time.time() - start_time
 
     if fmt == "raw_bytes":
-        img_array = np.frombuffer(response.content, dtype=np.uint8).reshape((3000, 3000))
+        height = int.from_bytes(response.content[:4], byteorder='big')
+        width = int.from_bytes(response.content[4:8], byteorder='big')
+        print(f"http image {fmt=} {width=} {height=}")
+        img_array = np.frombuffer(response.content[8:], dtype=np.uint8).reshape((height, width))
     elif fmt == "raw_base64":
-        raw_bytes = base64.b64decode(response.content)
-        img_array = np.frombuffer(raw_bytes, dtype=np.uint8).reshape((3000, 3000))
+        height = int.from_bytes(response.content[:4], byteorder='big')
+        width = int.from_bytes(response.content[4:8], byteorder='big')
+        print(f"http image {fmt=} {width=} {height=}")
+        raw_bytes = base64.b64decode(response.content[8:])
+        img_array = np.frombuffer(raw_bytes, dtype=np.uint8).reshape((height, width))
     else:
         img = Image.open(io.BytesIO(response.content))
         img_array = np.array(img)
+
 
     return elapsed_time, img_array
 
@@ -318,20 +391,19 @@ async def request_images_ws(fmt, quality=None, compress_level=None, progressive=
 
         elapsed_time = time.time() - start_time
 
-        # Decode data if base64-encoded, check size
         if fmt == "raw_base64":
-            decoded_data = base64.b64decode(full_data)
+            height = int.from_bytes(full_data[:4], byteorder='big')
+            width = int.from_bytes(full_data[4:8], byteorder='big')
+            print(f"ws image {fmt=} {width=} {height=}")
+            decoded_data=base64.b64decode(full_data[8:])
+            img_array = np.frombuffer(decoded_data, dtype=np.uint8).reshape((height, width))
+        elif fmt == "raw_bytes":
+            height = int.from_bytes(full_data[:4], byteorder='big')
+            width = int.from_bytes(full_data[4:8], byteorder='big')
+            print(f"ws image {fmt=} {width=} {height=}")
+            img_array = np.frombuffer(full_data[8:], dtype=np.uint8).reshape((height, width))
         else:
-            decoded_data = full_data
-
-        # Validate size and reshape for raw formats
-        if expected_size is not None and len(full_data) != expected_size:
-            raise ValueError(f"Received data size {len(full_data)} does not match expected size {expected_size}.")
-
-        if fmt in ["raw_bytes", "raw_base64"]:
-            img_array = np.frombuffer(decoded_data, dtype=np.uint8).reshape((3000, 3000))
-        else:
-            img = Image.open(io.BytesIO(decoded_data))
+            img = Image.open(io.BytesIO(full_data))
             img_array = np.array(img)
 
         return elapsed_time, img_array
@@ -348,16 +420,24 @@ def run_tests(num_repeats=3):
         "raw_base64": {}
     }
 
-    for fmt, options in tqdm(formats.items(), desc="Formats"):
+    tqdm_args=dict(
+    dynamic_ncols=False,  # Disable dynamic width adjustment
+    mininterval=0.5,      # Minimum time between updates
+    #leave=True,           # Leave the progress output when done
+    position=0            # Force updates to appear on a new line
+
+    )
+
+    for fmt, options in tqdm(formats.items(), desc="Formats",**tqdm_args):
         quality_levels = options.get("quality_levels", [None])
         compress_levels = options.get("compress_levels", [None])
         progressive_options = options.get("progressive", [None])
 
-        for quality in tqdm(quality_levels, desc=f"{fmt} Quality Levels", leave=False):
-            for compress_level in tqdm(compress_levels, desc=f"{fmt} Compression Levels", leave=False):
-                for progressive in tqdm(progressive_options, desc=f"{fmt} Progressive Options", leave=False):
-                    for method in tqdm(["HTTP", "WebSocket", "gRPC"], desc="Methods", leave=False):
-                        for _ in tqdm(range(num_repeats), desc="Repeats", leave=False):
+        for quality in tqdm(quality_levels, desc=f"{fmt} Quality Levels", leave=False,**tqdm_args):
+            for compress_level in tqdm(compress_levels, desc=f"{fmt} Compression Levels", leave=False,**tqdm_args):
+                for progressive in tqdm(progressive_options, desc=f"{fmt} Progressive Options", leave=False,**tqdm_args):
+                    for method in tqdm(["HTTP", "WebSocket", "gRPC"], desc="Methods", leave=False,**tqdm_args):
+                        for _ in tqdm(range(num_repeats), desc="Repeats", leave=False,**tqdm_args):
                             try:
                                 if method == "HTTP":
                                     elapsed_time, img_array = request_images_http(fmt, quality, compress_level, progressive)
@@ -408,10 +488,20 @@ def summarize_results(results):
 if __name__ == "__main__":
     compile_proto()
     grpc_server = start_grpc_server()
+
     Thread(target=start_http_server, daemon=True).start()
     Thread(target=run_websocket_server, daemon=True).start()
+
     time.sleep(2)  # Give servers a moment to start
+
     run_tests(num_repeats=NUM_TEST_REPEATS)
-    grpc_server.stop(0)
     summarize_results(results)
+
+    try:
+        time.sleep(300)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_http_server()
+        grpc_server.stop(0)
 
