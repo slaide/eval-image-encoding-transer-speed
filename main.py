@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-# requires: numpy Pillow pandas requests websockets grpcio grpcio-tools grpclib protobuf tqdm tabulate
+# requires:
+# numpy Pillow pandas requests websockets grpcio grpcio-tools grpclib protobuf tqdm tabulate scikit-image
 
 import os
 import sys
